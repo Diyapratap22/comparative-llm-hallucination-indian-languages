@@ -32,13 +32,11 @@ It is an open question whether models hallucinate at the same rate, in the same 
 
 ## Research Questions
 
-- **RQ1.** Does hallucination frequency differ between English and Hindi for the same underlying question?
-- **RQ2.** Does any English–Hindi difference vary across task categories?
-- **RQ3.** Are any language differences consistent across the models studied?
-- **RQ4.** Do hallucination characteristics — for example, partial versus wholesale fabrication, or refusal behaviour — differ between languages?
-- **RQ5.** *(Exploratory)* Can plausible language-related factors help interpret any observed differences, such as translation fidelity, tokenization, or training-data coverage?
-
-RQ5 is exploratory and is not intended to establish causal explanations; it will only be pursued if the data support it.
+- **RQ1.** How does hallucination frequency differ between English and Hindi when LLMs are evaluated using semantically equivalent and parallel questions?
+- **RQ2.** How does hallucination frequency vary across different LLMs and task categories?
+- **RQ3.** What types of hallucinations are most prevalent in English and Hindi responses?
+- **RQ4.** Does the difference in hallucination rate between English and Hindi vary across task categories?
+- **RQ5.** Is the observed difference between English and Hindi hallucination rates statistically significant?
 
 ## Experimental Design
 

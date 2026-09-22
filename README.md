@@ -192,6 +192,12 @@ B.Tech. Artificial Intelligence & Machine Learning
 Dr. Akhilesh Das Gupta Institute of Professional Studies, GGSIPU, New Delhi
 GitHub: [Kinjal7127](https://github.com/Kinjal7127)
 
+**Shivam**
+
+B.Tech. Artificial Intelligence & Machine Learning
+Dr. Akhilesh Das Gupta Institute of Professional Studies, GGSIPU, New Delhi
+GitHub: [Shivam-po](https://github.com/Shivam-po)
+
 ## References
 
 Verified references will be added to `paper/references.bib` as the literature review is finalized. No unverified citations are included in this repository.

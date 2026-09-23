@@ -1,13 +1,22 @@
-# Requirements for the planned research infrastructure.
-# NOTE: versions are intentionally unpinned until the environment is finalized.
-# Model-specific SDKs will be added only after the model list is confirmed.
-
+# Core data and scientific computing
 pandas
 numpy
 scipy
 scikit-learn
+
+# Visualization
 matplotlib
 seaborn
+
+# Utilities
 tqdm
 python-dotenv
 requests
+
+# LLM provider SDKs
+google-genai
+groq
+cohere
+
+# Excel support
+openpyxl

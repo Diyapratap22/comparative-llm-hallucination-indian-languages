@@ -31,3 +31,7 @@ __pycache__/
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# ---- Experiment outputs ----
+responses/raw_responses/
+results/

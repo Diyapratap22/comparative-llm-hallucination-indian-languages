@@ -1,155 +1,422 @@
-"""Model runner interface (SAFE SKELETON — no API calls).
+"""LLM model runners for the English-Hindi hallucination experiment.
 
-This module defines the interface that the future model runner will use. It
-performs **no network activity**, requires no credentials, and cannot run
-end-to-end yet. Every operation that will do real work later is either abstract
-or raises ``NotImplementedError``.
+This module provides a common interface for calling the selected LLMs.
 
-Implementation TODOs (to be completed once the model list is finalized):
+Supported providers:
+    - Google Gemini
+    - Groq
+    - Cohere
 
-- model initialization (client; credentials read from the environment only)
-- API request (per-provider implementation)
-- response extraction (parse the provider's raw output)
-- retry handling (transient failures, backoff)
-- rate limiting (delay between requests)
-- logging (request/response metadata for reproducibility)
+API keys are loaded from environment variables:
+    GEMINI_API_KEY
+    GROQ_API_KEY
+    COHERE_API_KEY
+
+No API keys are stored in source code.
+
+Experiment-level generation settings are imported from config.py.
 """
 
 from __future__ import annotations
 
+import os
+import time
 from abc import ABC, abstractmethod
-from typing import Any, Callable, Mapping, TypeVar
+from typing import Any, Callable, TypeVar
+
+from dotenv import load_dotenv
+
+from experiments.config import (
+    MAX_OUTPUT_TOKENS,
+    TEMPERATURE,
+)
+
+load_dotenv()
 
 _T = TypeVar("_T")
 
 
+# ============================================================================
+# Base Model Runner
+# ============================================================================
+
+
 class ModelRunner(ABC):
-    """Interface for sending prompts to one LLM and collecting responses.
+    """Common interface for all LLM providers."""
 
-    Concrete per-provider subclasses will be written once the model list and
-    API configuration are confirmed. Until then no subclass is required.
-    """
-
-    def __init__(self, model_id: str, timeout_seconds: float = 60.0) -> None:
+    def __init__(
+        self,
+        model_id: str,
+        timeout_seconds: float = 60.0,
+        max_retries: int = 3,
+        retry_delay_seconds: float = 2.0,
+    ) -> None:
         self.model_id = model_id
         self.timeout_seconds = timeout_seconds
-        self._client: Any = None  # set by initialize()
-        # TODO(logging): attach a logger here once logging is implemented.
+        self.max_retries = max_retries
+        self.retry_delay_seconds = retry_delay_seconds
 
-    # ------------------------------------------------------------------
-    # TODO(model-initialization): implement when the model list is final.
-    # - read the API key from the environment (never from source code)
-    # - instantiate and validate the provider client
-    # - set up logging for this runner
-    # ------------------------------------------------------------------
+        self._client: Any = None
+
+        self.initialize()
+
     @abstractmethod
     def initialize(self) -> None:
-        """Initialize the model client.
+        """Initialize the provider-specific API client."""
+        raise NotImplementedError
 
-        Raises
-        ------
-        NotImplementedError
-            Always, until the model list is finalized.
-        """
-        ...
-
-    # ------------------------------------------------------------------
-    # TODO(api-request): implement the actual HTTP/API call per provider.
-    # - call self._rate_limit() before each request
-    # - wrap the request with self._with_retries() for transient failures
-    # - call self._extract_response() on the raw provider response
-    # - call self._log() with request + response metadata
-    # ------------------------------------------------------------------
     @abstractmethod
-    def generate(self, prompt: str, language: str) -> str:
-        """Send ``prompt`` to the model and return the extracted answer text.
+    def generate(
+        self,
+        prompt: str,
+        language: str,
+        system_prompt: str | None = None,
+    ) -> str:
+        """Generate a model response for a given prompt."""
+        raise NotImplementedError
 
-        Parameters
-        ----------
-        prompt:
-            The final prompt (see ``experiments.prompts.build_prompt``).
-        language:
-            The language of the prompt: ``"en"`` or ``"hi"``.
-
-        Returns
-        -------
-        str
-            The model's answer text.
-
-        Raises
-        ------
-        NotImplementedError
-            Always, until the provider API is implemented.
-        """
-        ...
-
-    # ------------------------------------------------------------------
-    # TODO(response-extraction): implement provider-specific parsing once the
-    # raw response format is known. Providers may return chat messages, JSON
-    # envelopes, or plain text, so extraction must be provider-specific.
-    # ------------------------------------------------------------------
-    def _extract_response(self, raw_response: Mapping[str, Any]) -> str:
-        """Extract the answer text from a raw provider response (placeholder).
-
-        Raises
-        ------
-        NotImplementedError
-            Until the provider API is implemented.
-        """
-        raise NotImplementedError("Response extraction is not implemented yet.")
-
-    # ------------------------------------------------------------------
-    # TODO(retry-handling): implement retry with exponential backoff for
-    # transient network/provider errors once API calls exist.
-    # ------------------------------------------------------------------
     def _with_retries(
         self,
         fn: Callable[[], _T],
-        *,
-        max_attempts: int = 3,
-        base_delay_seconds: float = 1.0,
     ) -> _T:
-        """Run ``fn`` with retry and backoff (placeholder).
+        """Execute an API request with exponential-backoff retries.
 
-        Raises
-        ------
-        NotImplementedError
-            Until the retry policy is implemented.
+        The request is attempted up to ``max_retries`` times.
+        The final exception is preserved and included in the error message
+        so provider-specific failures are visible during pilot testing.
         """
-        raise NotImplementedError("Retry handling is not implemented yet.")
 
-    # ------------------------------------------------------------------
-    # TODO(rate-limiting): implement a minimum delay between consecutive
-    # requests, tuned to the provider's rate limits, once the API client
-    # exists.
-    # ------------------------------------------------------------------
-    def _rate_limit(self) -> None:
-        """Enforce a minimum delay between consecutive requests (placeholder).
+        last_error: Exception | None = None
 
-        Raises
-        ------
-        NotImplementedError
-            Until the rate limiter is implemented.
-        """
-        raise NotImplementedError("Rate limiting is not implemented yet.")
+        for attempt in range(
+            1,
+            self.max_retries + 1,
+        ):
+            try:
+                return fn()
 
-    # ------------------------------------------------------------------
-    # TODO(logging): implement structured logging of every request/response
-    # (run_id, timestamp, model_id, question_id, language, prompt, output)
-    # so the experiment is fully reproducible.
-    # ------------------------------------------------------------------
-    def _log(self, record: Mapping[str, Any]) -> None:
-        """Write a request/response metadata record (placeholder).
+            except Exception as exc:
+                last_error = exc
 
-        Parameters
-        ----------
-        record:
-            Dictionary with run_id, timestamp, model_id, question_id,
-            language, prompt, and raw output.
+                print(
+                    f"    Attempt {attempt}/{self.max_retries} "
+                    f"failed for {self.model_id}: {exc}"
+                )
 
-        Raises
-        ------
-        NotImplementedError
-            Until logging is implemented.
-        """
-        raise NotImplementedError("Logging is not implemented yet.")
+                if attempt == self.max_retries:
+                    break
+
+                delay = (
+                    self.retry_delay_seconds
+                    * (2 ** (attempt - 1))
+                )
+
+                print(
+                    f"    Retrying in {delay:.1f} seconds..."
+                )
+
+                time.sleep(delay)
+
+        raise RuntimeError(
+            f"Model '{self.model_id}' failed after "
+            f"{self.max_retries} attempts. "
+            f"Last error: {last_error}"
+        ) from last_error
+
+
+# ============================================================================
+# Gemini Runner
+# ============================================================================
+
+
+class GeminiRunner(ModelRunner):
+    """Runner for Google Gemini models."""
+
+    def initialize(self) -> None:
+        """Initialize the Gemini API client."""
+
+        from google import genai
+
+        api_key = os.getenv("GEMINI_API_KEY")
+
+        if not api_key:
+            raise RuntimeError(
+                "GEMINI_API_KEY was not found in the environment."
+            )
+
+        self._client = genai.Client(
+            api_key=api_key,
+        )
+
+    def generate(
+        self,
+        prompt: str,
+        language: str,
+        system_prompt: str | None = None,
+    ) -> str:
+        """Generate a response using Gemini."""
+
+        def request() -> str:
+            from google.genai import types
+
+            config_kwargs: dict[str, Any] = {
+                "temperature": TEMPERATURE,
+                "max_output_tokens": MAX_OUTPUT_TOKENS,
+            }
+
+            if system_prompt:
+                config_kwargs["system_instruction"] = system_prompt
+
+            response = self._client.models.generate_content(
+                model=self.model_id,
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    **config_kwargs
+                ),
+            )
+
+            text = getattr(
+                response,
+                "text",
+                None,
+            )
+
+            if not text:
+                raise RuntimeError(
+                    f"Gemini returned an empty response for "
+                    f"model '{self.model_id}'. "
+                    f"Raw response: {response!r}"
+                )
+
+            return text.strip()
+
+        return self._with_retries(request)
+
+
+# ============================================================================
+# Groq Runner
+# ============================================================================
+
+
+class GroqRunner(ModelRunner):
+    """Runner for models served through Groq."""
+
+    def initialize(self) -> None:
+        """Initialize the Groq API client."""
+
+        from groq import Groq
+
+        api_key = os.getenv("GROQ_API_KEY")
+
+        if not api_key:
+            raise RuntimeError(
+                "GROQ_API_KEY was not found in the environment."
+            )
+
+        self._client = Groq(
+            api_key=api_key,
+            timeout=self.timeout_seconds,
+        )
+
+    def generate(
+        self,
+        prompt: str,
+        language: str,
+        system_prompt: str | None = None,
+    ) -> str:
+        """Generate a response using a Groq-hosted model."""
+
+        def request() -> str:
+            messages: list[dict[str, str]] = []
+
+            if system_prompt:
+                messages.append(
+                    {
+                        "role": "system",
+                        "content": system_prompt,
+                    }
+                )
+
+            messages.append(
+                {
+                    "role": "user",
+                    "content": prompt,
+                }
+            )
+
+            response = self._client.chat.completions.create(
+                model=self.model_id,
+                messages=messages,
+                temperature=TEMPERATURE,
+                max_tokens=MAX_OUTPUT_TOKENS,
+            )
+
+            if not response.choices:
+                raise RuntimeError(
+                    f"Groq returned no choices for model "
+                    f"'{self.model_id}'."
+                )
+
+            text = response.choices[0].message.content
+
+            if not text:
+                raise RuntimeError(
+                    f"Groq returned an empty response for model "
+                    f"'{self.model_id}'."
+                )
+
+            return text.strip()
+
+        return self._with_retries(request)
+
+
+# ============================================================================
+# Cohere Runner
+# ============================================================================
+
+
+class CohereRunner(ModelRunner):
+    """Runner for Cohere chat models."""
+
+    def initialize(self) -> None:
+        """Initialize the Cohere API client."""
+
+        import cohere
+
+        api_key = os.getenv("COHERE_API_KEY")
+
+        if not api_key:
+            raise RuntimeError(
+                "COHERE_API_KEY was not found in the environment."
+            )
+
+        self._client = cohere.ClientV2(
+            api_key=api_key,
+        )
+
+    def generate(
+        self,
+        prompt: str,
+        language: str,
+        system_prompt: str | None = None,
+    ) -> str:
+        """Generate a response using Cohere."""
+
+        def request() -> str:
+            messages: list[dict[str, str]] = []
+
+            if system_prompt:
+                messages.append(
+                    {
+                        "role": "system",
+                        "content": system_prompt,
+                    }
+                )
+
+            messages.append(
+                {
+                    "role": "user",
+                    "content": prompt,
+                }
+            )
+
+            response = self._client.chat(
+                model=self.model_id,
+                messages=messages,
+                temperature=TEMPERATURE,
+                max_tokens=MAX_OUTPUT_TOKENS,
+            )
+
+            if not response.message.content:
+                raise RuntimeError(
+                    f"Cohere returned no content for model "
+                    f"'{self.model_id}'."
+                )
+
+            # Cohere can return multiple content blocks.
+            text_parts: list[str] = []
+
+            for block in response.message.content:
+
+                if hasattr(block, "text") and block.text:
+                    text_parts.append(
+                        block.text
+                    )
+
+            text = "\n".join(
+                text_parts
+            ).strip()
+
+            if not text:
+                raise RuntimeError(
+                    f"Cohere returned no text for model "
+                    f"'{self.model_id}'. "
+                    f"Raw response: {response!r}"
+                )
+
+            return text
+
+        return self._with_retries(request)
+
+
+# ============================================================================
+# Runner Factory
+# ============================================================================
+
+
+def create_runner(
+    provider: str,
+    model_id: str,
+    timeout_seconds: float = 60.0,
+) -> ModelRunner:
+    """Create and initialize a provider-specific model runner.
+
+    Parameters
+    ----------
+    provider:
+        Provider name:
+            ``gemini``
+            ``groq``
+            ``cohere``
+
+    model_id:
+        Exact API model identifier.
+
+    timeout_seconds:
+        Maximum time allowed for an API request.
+
+    Returns
+    -------
+    ModelRunner
+        Initialized provider-specific runner.
+
+    Raises
+    ------
+    ValueError
+        If the provider is unsupported.
+    """
+
+    provider = provider.lower().strip()
+
+    if provider == "gemini":
+        return GeminiRunner(
+            model_id=model_id,
+            timeout_seconds=timeout_seconds,
+        )
+
+    if provider == "groq":
+        return GroqRunner(
+            model_id=model_id,
+            timeout_seconds=timeout_seconds,
+        )
+
+    if provider == "cohere":
+        return CohereRunner(
+            model_id=model_id,
+            timeout_seconds=timeout_seconds,
+        )
+
+    raise ValueError(
+        f"Unsupported provider: {provider!r}. "
+        "Expected one of: gemini, groq, cohere."
+    )

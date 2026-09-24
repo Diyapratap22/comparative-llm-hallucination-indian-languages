@@ -116,9 +116,9 @@ NUM_CURATED_QUESTIONS: int = 200
 
 MODELS: list[dict[str, str]] = [
     {
-        "name": "Gemini 3.6 Flash",
+        "name": "Gemini 3.5 Flash-Lite",
         "provider": "gemini",
-        "model_id": "gemini-3.6-flash",
+        "model_id": "gemini-3.5-flash-lite",
     },
     {
         "name": "GPT-OSS 120B",
@@ -176,7 +176,7 @@ USE_WEB_SEARCH: bool = False
 # ============================================================================
 
 # Number of paired questions used for pipeline validation.
-PILOT_NUM_QUESTIONS: int = 10
+PILOT_NUM_QUESTIONS: int = 5
 
 
 # ============================================================================

@@ -51,7 +51,7 @@ from experiments.prompts import (
 # IMPORTANT:
 # Keep False for the 10-question pilot.
 # Change to True only after the pilot is verified.
-RUN_FULL_EXPERIMENT: bool = False
+RUN_FULL_EXPERIMENT: bool = True
 
 
 # ============================================================================
@@ -78,7 +78,7 @@ OUTPUT_FILE: Path = (
 # ============================================================================
 
 MODEL_PROVIDERS: dict[str, str] = {
-    "gemini-3.6-flash": "gemini",
+    "gemini-3.5-flash-lite": "gemini",
     "openai/gpt-oss-120b": "groq",
     "command-a-03-2025": "cohere",
     "qwen/qwen3.8-27b": "groq",
@@ -86,7 +86,7 @@ MODEL_PROVIDERS: dict[str, str] = {
 
 
 MODEL_NAMES: dict[str, str] = {
-    "gemini-3.6-flash": "Gemini 3.6 Flash",
+    "gemini-3.5-flash-lite": "Gemini 3.5 Flash-Lite",
     "openai/gpt-oss-120b": "GPT-OSS 120B",
     "command-a-03-2025": "Cohere Command A",
     "qwen/qwen3.8-27b": "Qwen 3.8 27B",
